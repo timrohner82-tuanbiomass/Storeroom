@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TIMS — Storage Box Inventory</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+:root{
+  --paper:#EDE7DA;
+  --paper-light:#F5F1E7;
+  --ink:#1C1B18;
+  --ink-soft:#4A463D;
+  --cardboard:#B98D57;
+  --cardboard-dark:#8A653A;
+  --tag-red:#B33A2E;
+  --tape:#D9C6A0;
+  --ok:#4B6B4F;
+  --line:#C9BFA9;
+  --white:#FFFDF8;
+}
+*{box-sizing:border-box;}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:'Inter',sans-serif;
+  min-height:100vh;
+}
+.label-font{font-family:'Space Mono',monospace;}
+a{color:inherit;}
+button{font-family:'Inter',sans-serif;cursor:pointer;}
+input,select,textarea{font-family:'Inter',sans-serif;}
+
+/* ---------- Layout shells ---------- */
+#app{max-width:920px;margin:0 auto;padding:28px 20px 80px;}
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:28px;padding-bottom:16px;border-bottom:3px solid var(--ink);
+}
+.brand{display:flex;align-items:center;gap:12px;}
+.brand-mark{
+  width:34px;height:34px;border:3px solid var(--ink);border-radius:3px;
+  position:relative;background:var(--cardboard);
+}
+.brand-mark::after{
+  content:"";position:absolute;left:50%;top:0;bottom:0;width:3px;background:var(--ink);
+  transform:translateX(-50%);
+}
+.brand h1{font-family:'Space Mono',monospace;font-size:19px;letter-spacing:0.5px;margin:0;}
+.brand p{margin:0;font-size:12px;color:var(--ink-soft);}
+.topbar-actions{display:flex;gap:8px;align-items:center;}
+
+.btn{
+  border:2px solid var(--ink);background:var(--white);color:var(--ink);
+  padding:9px 16px;font-size:13px;font-weight:600;border-radius:2px;
+  transition:transform .08s ease;
+}
+.btn:hover{transform:translateY(-1px);}
+.btn:active{transform:translateY(0);}
+.btn-primary{background:var(--ink);color:var(--paper-light);}
+.btn-accent{background:var(--tag-red);color:#fff;border-color:var(--tag-red);}
+.btn-ghost{border-color:var(--line);background:transparent;font-weight:500;}
+.btn-sm{padding:6px 10px;font-size:12px;}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none;}
+
+.hidden{display:none !important;}
+
+/* ---------- Setup screen ---------- */
+.setup-card{
+  background:var(--white);border:2px solid var(--ink);border-radius:4px;
+  padding:28px;max-width:520px;margin:40px auto;position:relative;
+}
+.setup-card::before{
+  content:"CONNECT";position:absolute;top:-13px;left:20px;background:var(--tape);
+  padding:2px 12px;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:2px;
+  border:1px solid var(--cardboard-dark);transform:rotate(-1.5deg);
+}
+.field{margin-bottom:14px;}
+.field label{display:block;font-size:12px;font-weight:600;margin-bottom:5px;color:var(--ink-soft);}
+.field input{
+  width:100%;padding:10px 11px;border:1.5px solid var(--line);border-radius:3px;
+  font-size:14px;background:var(--paper-light);
+}
+.field input:focus{outline:2px solid var(--cardboard-dark);outline-offset:1px;}
+.field-hint{font-size:11px;color:var(--ink-soft);margin-top:4px;}
+.remember-row{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--ink-soft);margin:14px 0;}
+.status-msg{font-size:13px;margin-top:14px;padding:10px 12px;border-radius:3px;border:1.5px solid var(--line);}
+.status-msg.error{border-color:var(--tag-red);color:var(--tag-red);background:#fbeceb;}
+.status-msg.ok{border-color:var(--ok);color:var(--ok);background:#eef3ee;}
+.status-msg.info{color:var(--ink-soft);}
+
+/* ---------- Dashboard ---------- */
+.dash-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap;}
+.search-wrap{flex:1;min-width:220px;}
+.search-wrap input{
+  width:100%;padding:11px 14px;border:2px solid var(--ink);border-radius:3px;
+  font-size:14px;background:var(--white);
+}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;}
+.box-card{
+  background:var(--white);border:2px dashed var(--cardboard-dark);border-radius:3px;
+  padding:16px;position:relative;cursor:pointer;transition:transform .1s ease, box-shadow .1s ease;
+  min-height:120px;display:flex;flex-direction:column;justify-content:space-between;
+}
+.box-card:hover{transform:translateY(-2px);box-shadow:3px 4px 0 var(--cardboard);}
+.box-card .tape{
+  position:absolute;top:-8px;left:16px;width:60px;height:16px;background:var(--tape);
+  opacity:.9;transform:rotate(-2deg);border:1px solid var(--cardboard-dark);
+}
+.box-id{font-family:'Space Mono',monospace;font-size:11px;color:var(--cardboard-dark);letter-spacing:1px;}
+.box-name{font-size:16px;font-weight:700;margin:4px 0 2px;}
+.box-loc{font-size:12px;color:var(--ink-soft);}
+.box-count{
+  align-self:flex-start;margin-top:10px;font-family:'Space Mono',monospace;font-size:11px;
+  background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:3px 10px;
+}
+.box-match{font-size:11px;color:var(--tag-red);margin-top:6px;font-style:italic;}
+.empty-state{
+  border:2px dashed var(--line);border-radius:4px;padding:40px 20px;text-align:center;color:var(--ink-soft);
+}
+
+/* ---------- Box detail ---------- */
+.detail-head{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-bottom:20px;flex-wrap:wrap;}
+.detail-title{font-size:22px;font-weight:700;margin:0 0 2px;}
+.detail-meta{font-size:13px;color:var(--ink-soft);}
+.qr-panel{
+  background:var(--white);border:2px solid var(--ink);border-radius:4px;padding:14px;
+  text-align:center;min-width:170px;
+}
+.qr-panel img,.qr-panel canvas{display:block;margin:0 auto;}
+.qr-panel .qr-id{font-family:'Space Mono',monospace;font-size:12px;margin-top:8px;letter-spacing:1px;}
+.qr-actions{display:flex;gap:6px;margin-top:10px;justify-content:center;flex-wrap:wrap;}
+
+table.items{width:100%;border-collapse:collapse;background:var(--white);border:2px solid var(--ink);border-radius:3px;overflow:hidden;}
+table.items th{
+  text-align:left;font-size:11px;letter-spacing:.5px;color:var(--ink-soft);
+  padding:10px 12px;border-bottom:2px solid var(--ink);font-weight:600;background:var(--paper-light);
+}
+table.items td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
+table.items tr:last-child td{border-bottom:none;}
+table.items input,table.items textarea{
+  width:100%;border:1px solid transparent;background:transparent;padding:4px 6px;border-radius:2px;font-size:13.5px;
+}
+table.items input:focus,table.items textarea:focus{border-color:var(--line);background:var(--paper-light);outline:none;}
+.col-qty{width:70px;}
+.col-del{width:36px;text-align:center;}
+.icon-del{
+  border:none;background:transparent;color:var(--tag-red);font-size:16px;font-weight:700;padding:2px 6px;
+}
+.add-row-btn{margin-top:10px;}
+
+.section-label{
+  font-family:'Space Mono',monospace;font-size:11px;letter-spacing:1.5px;color:var(--cardboard-dark);
+  margin:26px 0 8px;text-transform:uppercase;
+}
+
+/* ---------- Modal / edit box ---------- */
+.overlay{
+  position:fixed;inset:0;background:rgba(28,27,24,.5);display:flex;align-items:center;justify-content:center;
+  padding:20px;z-index:50;
+}
+.modal{background:var(--white);border:2px solid var(--ink);border-radius:4px;padding:24px;max-width:420px;width:100%;}
+.modal h3{margin-top:0;font-family:'Space Mono',monospace;font-size:16px;}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;}
+
+/* ---------- Print labels ---------- */
+#printArea{display:none;}
+@media print{
+  body *{visibility:hidden;}
+  #printArea, #printArea *{visibility:visible;}
+  #printArea{display:block;position:absolute;top:0;left:0;width:100%;}
+  .print-label{
+    width:2.6in;height:2.6in;border:1.5px dashed #999;display:inline-flex;flex-direction:column;
+    align-items:center;justify-content:center;margin:6px;padding:10px;page-break-inside:avoid;
+  }
+  .print-label .pl-id{font-family:'Space Mono',monospace;font-size:13px;font-weight:700;margin-top:6px;}
+  .print-label .pl-name{font-size:11px;color:#333;text-align:center;margin-top:2px;}
+}
+
+footer{margin-top:50px;font-size:11px;color:var(--ink-soft);text-align:center;}
+.spinner{display:inline-block;width:13px;height:13px;border:2px solid var(--line);border-top-color:var(--ink);border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:6px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+@media (max-width:520px){
+  .detail-head{flex-direction:column;}
+  .qr-panel{align-self:stretch;}
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark"></div>
+      <div>
+        <h1>MANIFEST</h1>
+        <p>Storage box inventory, kept in your GitHub repo</p>
+      </div>
+    </div>
+    <div class="topbar-actions" id="topbarActions"></div>
+  </div>
+
+  <!-- SETUP SCREEN -->
+  <div id="setupScreen">
+    <div class="setup-card">
+      <h3 class="label-font" style="margin-top:4px;">Connect your repo</h3>
+      <p style="font-size:13px;color:var(--ink-soft);margin-top:-6px;">
+        Your inventory lives in an .xlsx file inside a GitHub repo. Enter the details below to load or create it.
+      </p>
+      <div class="field">
+        <label for="cfgOwner">GitHub username / org</label>
+        <input id="cfgOwner" placeholder="e.g. jsmith">
+      </div>
+      <div class="field">
+        <label for="cfgRepo">Repository name</label>
+        <input id="cfgRepo" placeholder="e.g. storage-manifest">
+      </div>
+      <div class="field">
+        <label for="cfgPath">File path in repo</label>
+        <input id="cfgPath" placeholder="inventory.xlsx" value="inventory.xlsx">
+      </div>
+      <div class="field">
+        <label for="cfgSite">Site URL (where this page is hosted)</label>
+        <input id="cfgSite" placeholder="https://jsmith.github.io/storage-manifest/">
+        <div class="field-hint">Used to build the QR code links. Usually https://USERNAME.github.io/REPO/</div>
+      </div>
+      <div class="field">
+        <label for="cfgToken">Personal access token</label>
+        <input id="cfgToken" type="password" placeholder="github_pat_...">
+        <div class="field-hint">Fine-grained token, scoped to this repo only, with "Contents: Read and write" permission. <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Create one →</a></div>
+      </div>
+      <label class="remember-row">
+        <input type="checkbox" id="cfgRemember" style="margin-top:2px;">
+        <span>Remember this token on this device (stored only in this browser). Only enable this on a personal device — anyone with it can edit your repo.</span>
+      </label>
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-primary" id="btnConnect">Connect</button>
+      </div>
+      <div id="setupStatus"></div>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="dashScreen" class="hidden">
+    <div class="dash-head">
+      <div class="search-wrap">
+        <input id="searchInput" placeholder="Search boxes or items… (e.g. &quot;winter coat&quot;)">
+      </div>
+      <button class="btn btn-accent" id="btnAddBox">+ New box</button>
+    </div>
+    <div id="grid" class="grid"></div>
+  </div>
+
+  <!-- BOX DETAIL -->
+  <div id="detailScreen" class="hidden">
+    <button class="btn btn-ghost btn-sm" id="btnBack">← All boxes</button>
+    <div class="detail-head" style="margin-top:16px;">
+      <div>
+        <div class="box-id label-font" id="detailBoxId"></div>
+        <div class="detail-title" id="detailBoxName"></div>
+        <div class="detail-meta" id="detailBoxLoc"></div>
+        <div style="margin-top:10px;display:flex;gap:8px;">
+          <button class="btn btn-ghost btn-sm" id="btnEditBox">Edit box</button>
+          <button class="btn btn-ghost btn-sm" id="btnDeleteBox">Delete box</button>
+        </div>
+      </div>
+      <div class="qr-panel">
+        <div id="qrCanvasHolder"></div>
+        <div class="qr-id label-font" id="qrIdLabel"></div>
+        <div class="qr-actions">
+          <button class="btn btn-sm" id="btnCopyLink">Copy link</button>
+          <button class="btn btn-sm" id="btnPrintOne">Print label</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-label">Itemized contents</div>
+    <table class="items">
+      <thead>
+        <tr><th>Item</th><th class="col-qty">Qty</th><th>Notes</th><th class="col-del"></th></tr>
+      </thead>
+      <tbody id="itemsBody"></tbody>
+    </table>
+    <button class="btn btn-ghost btn-sm add-row-btn" id="btnAddItem">+ Add item</button>
+
+    <div style="margin-top:26px;">
+      <button class="btn btn-primary" id="btnSave">Save changes to GitHub</button>
+      <span id="saveStatus" style="font-size:12px;color:var(--ink-soft);margin-left:10px;"></span>
+    </div>
+  </div>
+
+  <footer>Manifest — a static page. Nothing is stored anywhere except the .xlsx file in your GitHub repo and, optionally, your token in this browser.</footer>
+</div>
+
+<!-- hidden print area, filled dynamically -->
+<div id="printArea"></div>
+
+<script>
+/* ======================= STATE ======================= */
+const state = {
+  owner:'', repo:'', path:'inventory.xlsx', siteUrl:'', token:'',
+  sha:null, boxes:[], items:[], currentBoxId:null
+};
+
+const CFG_KEY = 'manifest_cfg_v1';
+const TOKEN_KEY = 'manifest_token_v1';
+
+function safeGetLocal(key){
+  try{ return localStorage.getItem(key); }catch(e){ return null; }
+}
+function safeSetLocal(key,val){
+  try{ localStorage.setItem(key,val); }catch(e){ /* not available (e.g. sandboxed preview) */ }
+}
+function safeRemoveLocal(key){
+  try{ localStorage.removeItem(key); }catch(e){}
+}
+
+/* ======================= INIT ======================= */
+window.addEventListener('DOMContentLoaded', () => {
+  const savedCfg = safeGetLocal(CFG_KEY);
+  if(savedCfg){
+    try{
+      const c = JSON.parse(savedCfg);
+      document.getElementById('cfgOwner').value = c.owner || '';
+      document.getElementById('cfgRepo').value = c.repo || '';
+      document.getElementById('cfgPath').value = c.path || 'inventory.xlsx';
+      document.getElementById('cfgSite').value = c.siteUrl || '';
+    }catch(e){}
+  }
+  const savedToken = safeGetLocal(TOKEN_KEY);
+  if(savedToken){
+    document.getElementById('cfgToken').value = savedToken;
+    document.getElementById('cfgRemember').checked = true;
+  }
+
+  document.getElementById('btnConnect').addEventListener('click', handleConnect);
+  document.getElementById('btnAddBox').addEventListener('click', handleAddBox);
+  document.getElementById('btnBack').addEventListener('click', () => navigate('dashboard'));
+  document.getElementById('searchInput').addEventListener('input', renderDashboard);
+  document.getElementById('btnAddItem').addEventListener('click', () => addItemRow());
+  document.getElementById('btnSave').addEventListener('click', () => saveInventory());
+  document.getElementById('btnEditBox').addEventListener('click', handleEditBox);
+  document.getElementById('btnDeleteBox').addEventListener('click', handleDeleteBox);
+  document.getElementById('btnCopyLink').addEventListener('click', handleCopyLink);
+  document.getElementById('btnPrintOne').addEventListener('click', () => printLabels([state.currentBoxId]));
+
+  // If we already have a saved config + token, auto-attempt connect when a box hash is present
+  const hash = parseHash();
+  if(savedCfg && savedToken && hash.box){
+    document.getElementById('cfgOwner').value = JSON.parse(savedCfg).owner;
+    handleConnect(null, hash.box);
+  }
+});
+
+window.addEventListener('hashchange', () => {
+  const hash = parseHash();
+  if(state.owner && hash.box){
+    openBox(hash.box);
+  } else if(state.owner && !hash.box){
+    navigate('dashboard', false);
+  }
+});
+
+function parseHash(){
+  const h = location.hash.replace('#','');
+  const params = {};
+  h.split('&').forEach(kv=>{
+    const [k,v] = kv.split('=');
+    if(k) params[k] = decodeURIComponent(v||'');
+  });
+  return params;
+}
+
+/* ======================= CONNECT / GITHUB ======================= */
+async function handleConnect(evt, autoOpenBoxId){
+  const owner = document.getElementById('cfgOwner').value.trim();
+  const repo = document.getElementById('cfgRepo').value.trim();
+  const path = document.getElementById('cfgPath').value.trim() || 'inventory.xlsx';
+  const siteUrl = document.getElementById('cfgSite').value.trim().replace(/\/?$/, '/');
+  const token = document.getElementById('cfgToken').value.trim();
+  const remember = document.getElementById('cfgRemember').checked;
+
+  if(!owner || !repo || !token){
+    setSetupStatus('Please fill in username, repo, and token.', 'error');
+    return;
+  }
+
+  state.owner = owner; state.repo = repo; state.path = path; state.siteUrl = siteUrl; state.token = token;
+
+  safeSetLocal(CFG_KEY, JSON.stringify({owner, repo, path, siteUrl}));
+  if(remember){ safeSetLocal(TOKEN_KEY, token); } else { safeRemoveLocal(TOKEN_KEY); }
+
+  setSetupStatus('<span class="spinner"></span>Connecting…', 'info');
+  const btn = document.getElementById('btnConnect');
+  btn.disabled = true;
+
+  try{
+    const res = await ghRequest('GET');
+    if(res.status === 404){
+      setSetupStatus('No inventory file found at that path yet. <button class="btn btn-sm btn-accent" id="btnCreateFile" style="margin-left:6px;">Create it</button>', 'info');
+      document.getElementById('btnCreateFile').addEventListener('click', createNewFile);
+      btn.disabled = false;
+      return;
+    }
+    if(res.status === 401 || res.status === 403){
+      setSetupStatus('GitHub rejected the token. Check it has "Contents: Read and write" access to this repo.', 'error');
+      btn.disabled = false;
+      return;
+    }
+    if(!res.ok){
+      setSetupStatus(`GitHub error: ${res.status} ${res.statusText}`, 'error');
+      btn.disabled = false;
+      return;
+    }
+    const data = await res.json();
+    loadWorkbookFromBase64(data.content);
+    state.sha = data.sha;
+    setSetupStatus('Connected.', 'ok');
+    renderTopbarActions();
+    navigate('dashboard');
+    if(autoOpenBoxId) openBox(autoOpenBoxId);
+  }catch(err){
+    setSetupStatus('Could not reach GitHub. Check your network connection.', 'error');
+  }
+  btn.disabled = false;
+}
+
+async function createNewFile(){
+  setSetupStatus('<span class="spinner"></span>Creating inventory.xlsx…', 'info');
+  const wb = XLSX.utils.book_new();
+  const boxesWS = XLSX.utils.json_to_sheet([], {header:['ID','Name','Location','Notes','Created']});
+  const itemsWS = XLSX.utils.json_to_sheet([], {header:['BoxID','Item','Quantity','Notes']});
+  XLSX.utils.book_append_sheet(wb, boxesWS, 'Boxes');
+  XLSX.utils.book_append_sheet(wb, itemsWS, 'Items');
+  const base64 = XLSX.write(wb, {type:'base64', bookType:'xlsx'});
+  try{
+    const res = await ghRequest('PUT', {
+      message: 'Create inventory file',
+      content: base64
+    });
+    if(!res.ok){
+      const errBody = await res.json().catch(()=>({}));
+      setSetupStatus(`Could not create file: ${errBody.message || res.statusText}`, 'error');
+      return;
+    }
+    const data = await res.json();
+    state.sha = data.content.sha;
+    state.boxes = []; state.items = [];
+    setSetupStatus('Inventory file created.', 'ok');
+    renderTopbarActions();
+    navigate('dashboard');
+  }catch(e){
+    setSetupStatus('Could not reach GitHub.', 'error');
+  }
+}
+
+function ghRequest(method, body){
+  const url = `https://api.github.com/repos/${state.owner}/${state.repo}/contents/${encodeURIComponent(state.path)}`;
+  const headers = {
+    'Authorization': `Bearer ${state.token}`,
+    'Accept': 'application/vnd.github+json'
+  };
+  const opts = {method, headers};
+  if(body){
+    if(state.sha) body.sha = state.sha;
+    headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  return fetch(url, opts);
+}
+
+function loadWorkbookFromBase64(b64){
+  const binary = atob(b64.replace(/\n/g,''));
+  const bytes = new Uint8Array(binary.length);
+  for(let i=0;i<binary.length;i++) bytes[i] = binary.charCodeAt(i);
+  const wb = XLSX.read(bytes, {type:'array'});
+  const boxesSheet = wb.Sheets['Boxes'];
+  const itemsSheet = wb.Sheets['Items'];
+  state.boxes = boxesSheet ? XLSX.utils.sheet_to_json(boxesSheet) : [];
+  state.items = itemsSheet ? XLSX.utils.sheet_to_json(itemsSheet) : [];
+  state.boxes.forEach(b => b.ID = String(b.ID));
+  state.items.forEach(i => i.BoxID = String(i.BoxID));
+}
+
+async function saveInventory(){
+  const status = document.getElementById('saveStatus');
+  status.innerHTML = '<span class="spinner"></span>Saving…';
+  const wb = XLSX.utils.book_new();
+  const boxesWS = XLSX.utils.json_to_sheet(state.boxes, {header:['ID','Name','Location','Notes','Created']});
+  const itemsWS = XLSX.utils.json_to_sheet(state.items, {header:['BoxID','Item','Quantity','Notes']});
+  XLSX.utils.book_append_sheet(wb, boxesWS, 'Boxes');
+  XLSX.utils.book_append_sheet(wb, itemsWS, 'Items');
+  const base64 = XLSX.write(wb, {type:'base64', bookType:'xlsx'});
+  try{
+    const res = await ghRequest('PUT', {
+      message: `Update inventory — ${new Date().toLocaleString()}`,
+      content: base64
+    });
+    if(!res.ok){
+      const errBody = await res.json().catch(()=>({}));
+      status.textContent = `Save failed: ${errBody.message || res.statusText}`;
+      return;
+    }
+    const data = await res.json();
+    state.sha = data.content.sha;
+    status.textContent = 'Saved to GitHub ✓';
+    setTimeout(()=>{ status.textContent=''; }, 3000);
+  }catch(e){
+    status.textContent = 'Could not reach GitHub.';
+  }
+}
+
+function setSetupStatus(html, kind){
+  const el = document.getElementById('setupStatus');
+  el.className = `status-msg ${kind||''}`;
+  el.innerHTML = html;
+}
+
+function renderTopbarActions(){
+  const el = document.getElementById('topbarActions');
+  el.innerHTML = `
+    <span style="font-size:12px;color:var(--ink-soft);margin-right:6px;" class="label-font">${state.owner}/${state.repo}</span>
+    <button class="btn btn-ghost btn-sm" id="btnDisconnect">Disconnect</button>
+  `;
+  document.getElementById('btnDisconnect').addEventListener('click', () => {
+    state.token = '';
+    safeRemoveLocal(TOKEN_KEY);
+    document.getElementById('setupScreen').classList.remove('hidden');
+    document.getElementById('dashScreen').classList.add('hidden');
+    document.getElementById('detailScreen').classList.add('hidden');
+    document.getElementById('topbarActions').innerHTML = '';
+    location.hash = '';
+  });
+}
+
+/* ======================= NAVIGATION ======================= */
+function navigate(screen, updateHash=true){
+  document.getElementById('setupScreen').classList.add('hidden');
+  document.getElementById('dashScreen').classList.add('hidden');
+  document.getElementById('detailScreen').classList.add('hidden');
+  if(screen === 'dashboard'){
+    document.getElementById('dashScreen').classList.remove('hidden');
+    if(updateHash) location.hash = '';
+    renderDashboard();
+  } else if(screen === 'detail'){
+    document.getElementById('detailScreen').classList.remove('hidden');
+  }
+}
+
+/* ======================= DASHBOARD ======================= */
+function renderDashboard(){
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+
+  if(state.boxes.length === 0){
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">
+      No boxes yet. Click "+ New box" to pack your first one.
+    </div>`;
+    return;
+  }
+
+  const filtered = state.boxes.map(box => {
+    const boxItems = state.items.filter(i => i.BoxID === box.ID);
+    let matchedItem = null;
+    const boxTextMatch = (box.Name||'').toLowerCase().includes(q) || (box.Location||'').toLowerCase().includes(q) || (box.ID||'').toLowerCase().includes(q);
+    if(q && !boxTextMatch){
+      matchedItem = boxItems.find(i => (i.Item||'').toLowerCase().includes(q) || (i.Notes||'').toLowerCase().includes(q));
+    }
+    return {box, boxItems, visible: !q || boxTextMatch || matchedItem, matchedItem};
+  }).filter(r => r.visible);
+
+  if(filtered.length === 0){
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">No boxes or items match "${escapeHtml(q)}".</div>`;
+    return;
+  }
+
+  filtered.forEach(({box, boxItems, matchedItem}) => {
+    const card = document.createElement('div');
+    card.className = 'box-card';
+    card.innerHTML = `
+      <div class="tape"></div>
+      <div>
+        <div class="box-id label-font">${escapeHtml(box.ID)}</div>
+        <div class="box-name">${escapeHtml(box.Name||'Untitled box')}</div>
+        <div class="box-loc">${escapeHtml(box.Location||'No location set')}</div>
+        ${matchedItem ? `<div class="box-match">contains "${escapeHtml(matchedItem.Item)}"</div>` : ''}
+      </div>
+      <div class="box-count label-font">${boxItems.length} item${boxItems.length===1?'':'s'}</div>
+    `;
+    card.addEventListener('click', () => { location.hash = `box=${encodeURIComponent(box.ID)}`; });
+    grid.appendChild(card);
+  });
+}
+
+function nextBoxId(){
+  let max = 0;
+  state.boxes.forEach(b => {
+    const m = String(b.ID).match(/(\d+)/);
+    if(m) max = Math.max(max, parseInt(m[1],10));
+  });
+  return 'B' + String(max+1).padStart(3,'0');
+}
+
+function handleAddBox(){
+  const id = nextBoxId();
+  state.boxes.push({ID:id, Name:'New box', Location:'', Notes:'', Created:new Date().toISOString().slice(0,10)});
+  location.hash = `box=${id}`;
+}
+
+/* ======================= BOX DETAIL ======================= */
+function openBox(boxId){
+  const box = state.boxes.find(b => b.ID === boxId);
+  if(!box){
+    navigate('dashboard');
+    return;
+  }
+  state.currentBoxId = boxId;
+  navigate('detail');
+  document.getElementById('detailBoxId').textContent = box.ID;
+  document.getElementById('detailBoxName').textContent = box.Name || 'Untitled box';
+  document.getElementById('detailBoxLoc').textContent = box.Location || 'No location set';
+  renderItemsTable();
+  renderQR(box);
+}
+
+function renderItemsTable(){
+  const tbody = document.getElementById('itemsBody');
+  tbody.innerHTML = '';
+  const boxItems = state.items.filter(i => i.BoxID === state.currentBoxId);
+  if(boxItems.length === 0){
+    tbody.innerHTML = `<tr><td colspan="4" style="color:var(--ink-soft);font-size:13px;">No items logged yet.</td></tr>`;
+    return;
+  }
+  boxItems.forEach(item => addItemRow(item));
+}
+
+function addItemRow(item){
+  const isNew = !item;
+  if(isNew){
+    item = {BoxID: state.currentBoxId, Item:'', Quantity:1, Notes:''};
+    state.items.push(item);
+  }
+  const tbody = document.getElementById('itemsBody');
+  if(tbody.children.length === 1 && tbody.children[0].children.length === 1){
+    tbody.innerHTML = ''; // clear "no items" placeholder
+  }
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="text" value="${escapeHtml(item.Item||'')}" data-field="Item" placeholder="e.g. Christmas lights"></td>
+    <td class="col-qty"><input type="number" min="0" value="${item.Quantity!=null?item.Quantity:1}" data-field="Quantity"></td>
+    <td><input type="text" value="${escapeHtml(item.Notes||'')}" data-field="Notes" placeholder="optional"></td>
+    <td class="col-del"><button class="icon-del" title="Remove item">×</button></td>
+  `;
+  tr.querySelectorAll('input').forEach(inp => {
+    inp.addEventListener('input', () => { item[inp.dataset.field] = inp.value; });
+  });
+  tr.querySelector('.icon-del').addEventListener('click', () => {
+    state.items.splice(state.items.indexOf(item), 1);
+    tr.remove();
+    if(state.items.filter(i=>i.BoxID===state.currentBoxId).length === 0){
+      renderItemsTable();
+    }
+  });
+  tbody.appendChild(tr);
+}
+
+function handleEditBox(){
+  const box = state.boxes.find(b => b.ID === state.currentBoxId);
+  showModal(`
+    <h3>Edit box</h3>
+    <div class="field"><label>Name</label><input id="modalName" value="${escapeHtml(box.Name||'')}"></div>
+    <div class="field"><label>Location</label><input id="modalLoc" value="${escapeHtml(box.Location||'')}" placeholder="e.g. Garage shelf 3"></div>
+    <div class="field"><label>Notes</label><input id="modalNotes" value="${escapeHtml(box.Notes||'')}"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" id="modalCancel">Cancel</button>
+      <button class="btn btn-primary btn-sm" id="modalSave">Save</button>
+    </div>
+  `, () => {
+    document.getElementById('modalCancel').addEventListener('click', closeModal);
+    document.getElementById('modalSave').addEventListener('click', () => {
+      box.Name = document.getElementById('modalName').value;
+      box.Location = document.getElementById('modalLoc').value;
+      box.Notes = document.getElementById('modalNotes').value;
+      closeModal();
+      openBox(state.currentBoxId);
+      renderDashboard();
+    });
+  });
+}
+
+function handleDeleteBox(){
+  const box = state.boxes.find(b => b.ID === state.currentBoxId);
+  showModal(`
+    <h3>Delete "${escapeHtml(box.Name||box.ID)}"?</h3>
+    <p style="font-size:13px;color:var(--ink-soft);">This removes the box and its ${state.items.filter(i=>i.BoxID===box.ID).length} logged item(s). This can't be undone until you save — cancel any time before that.</p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" id="modalCancel">Cancel</button>
+      <button class="btn btn-accent btn-sm" id="modalConfirmDel">Delete box</button>
+    </div>
+  `, () => {
+    document.getElementById('modalCancel').addEventListener('click', closeModal);
+    document.getElementById('modalConfirmDel').addEventListener('click', () => {
+      state.boxes = state.boxes.filter(b => b.ID !== box.ID);
+      state.items = state.items.filter(i => i.BoxID !== box.ID);
+      closeModal();
+      navigate('dashboard');
+    });
+  });
+}
+
+function showModal(html, onMount){
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.id = 'activeOverlay';
+  overlay.innerHTML = `<div class="modal">${html}</div>`;
+  overlay.addEventListener('click', (e) => { if(e.target === overlay) closeModal(); });
+  document.body.appendChild(overlay);
+  if(onMount) onMount();
+}
+function closeModal(){
+  const o = document.getElementById('activeOverlay');
+  if(o) o.remove();
+}
+
+/* ======================= QR CODES ======================= */
+function boxUrl(boxId){
+  const base = state.siteUrl || (location.origin + location.pathname);
+  return `${base}#box=${encodeURIComponent(boxId)}`;
+}
+
+function renderQR(box){
+  const holder = document.getElementById('qrCanvasHolder');
+  holder.innerHTML = '';
+  new QRCode(holder, {
+    text: boxUrl(box.ID),
+    width: 140,
+    height: 140,
+    colorDark: '#1C1B18',
+    colorLight: '#FFFDF8',
+    correctLevel: QRCode.CorrectLevel.M
+  });
+  document.getElementById('qrIdLabel').textContent = box.ID;
+}
+
+function handleCopyLink(){
+  const url = boxUrl(state.currentBoxId);
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = document.getElementById('btnCopyLink');
+    const old = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(()=>{ btn.textContent = old; }, 1500);
+  }).catch(()=>{ prompt('Copy this link:', url); });
+}
+
+/* ======================= PRINTING ======================= */
+function printLabels(boxIds){
+  const area = document.getElementById('printArea');
+  area.innerHTML = '';
+  boxIds.forEach(id => {
+    const box = state.boxes.find(b => b.ID === id);
+    if(!box) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'print-label';
+    const qrDiv = document.createElement('div');
+    wrap.appendChild(qrDiv);
+    const idEl = document.createElement('div');
+    idEl.className = 'pl-id';
+    idEl.textContent = box.ID;
+    const nameEl = document.createElement('div');
+    nameEl.className = 'pl-name';
+    nameEl.textContent = box.Name || '';
+    wrap.appendChild(idEl);
+    wrap.appendChild(nameEl);
+    area.appendChild(wrap);
+    new QRCode(qrDiv, { text: boxUrl(box.ID), width: 110, height: 110, correctLevel: QRCode.CorrectLevel.M });
+  });
+  setTimeout(() => window.print(), 200);
+}
+
+/* ======================= UTIL ======================= */
+function escapeHtml(str){
+  return String(str==null?'':str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+</script>
+</body>
+</html>
