@@ -135,6 +135,24 @@ input,select,textarea{font-family:'Inter',sans-serif;}
 .qr-panel .qr-id{font-family:'Space Mono',monospace;font-size:12px;margin-top:8px;letter-spacing:1px;}
 .qr-actions{display:flex;gap:6px;margin-top:10px;justify-content:center;flex-wrap:wrap;}
 
+.photo-panel{
+  background:var(--white);border:2px solid var(--ink);border-radius:4px;padding:14px;
+  text-align:center;min-width:150px;
+}
+.photo-frame{
+  width:150px;height:150px;border:2px dashed var(--line);border-radius:3px;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;background:var(--paper-light);
+  cursor:pointer;position:relative;
+}
+.photo-frame:hover{border-color:var(--cardboard-dark);}
+.photo-frame img{width:100%;height:100%;object-fit:cover;display:block;}
+.photo-placeholder{font-size:11px;color:var(--ink-soft);padding:10px;line-height:1.4;}
+.box-thumb{
+  position:absolute;top:10px;right:10px;width:46px;height:46px;border-radius:3px;overflow:hidden;
+  border:1.5px solid var(--cardboard-dark);background:var(--paper-light);
+}
+.box-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+
 table.items{width:100%;border-collapse:collapse;background:var(--white);border:2px solid var(--ink);border-radius:3px;overflow:hidden;}
 table.items th{
   text-align:left;font-size:11px;letter-spacing:.5px;color:var(--ink-soft);
@@ -198,8 +216,8 @@ footer{margin-top:50px;font-size:11px;color:var(--ink-soft);text-align:center;}
     <div class="brand">
       <div class="brand-mark"></div>
       <div>
-        <h1>TIMS STORAGE SOLUTIONS</h1>
-        <p>Storage box inventory</p>
+        <h1>MANIFEST</h1>
+        <p>Storage box inventory, kept in your GitHub repo</p>
       </div>
     </div>
     <div class="topbar-actions" id="topbarActions"></div>
@@ -260,6 +278,16 @@ footer{margin-top:50px;font-size:11px;color:var(--ink-soft);text-align:center;}
   <div id="detailScreen" class="hidden">
     <button class="btn btn-ghost btn-sm" id="btnBack">← All boxes</button>
     <div class="detail-head" style="margin-top:16px;">
+      <div class="photo-panel">
+        <div class="photo-frame" id="photoFrame">
+          <span class="photo-placeholder">No photo yet</span>
+        </div>
+        <input type="file" id="photoInput" accept="image/*" capture="environment" class="hidden">
+        <div class="qr-actions">
+          <button class="btn btn-sm" id="btnAddPhoto">Add photo</button>
+          <button class="btn btn-sm btn-ghost hidden" id="btnRemovePhoto">Remove</button>
+        </div>
+      </div>
       <div>
         <div class="box-id label-font" id="detailBoxId"></div>
         <div class="detail-title" id="detailBoxName"></div>
@@ -294,7 +322,7 @@ footer{margin-top:50px;font-size:11px;color:var(--ink-soft);text-align:center;}
     </div>
   </div>
 
-  <footer>TIMS STORAGE SOULUTIONS  .</footer>
+  <footer>Manifest — a static page. Nothing is stored anywhere except the .xlsx file in your GitHub repo and, optionally, your token in this browser.</footer>
 </div>
 
 <!-- hidden print area, filled dynamically -->
@@ -348,6 +376,10 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnDeleteBox').addEventListener('click', handleDeleteBox);
   document.getElementById('btnCopyLink').addEventListener('click', handleCopyLink);
   document.getElementById('btnPrintOne').addEventListener('click', () => printLabels([state.currentBoxId]));
+  document.getElementById('photoFrame').addEventListener('click', () => document.getElementById('photoInput').click());
+  document.getElementById('btnAddPhoto').addEventListener('click', () => document.getElementById('photoInput').click());
+  document.getElementById('btnRemovePhoto').addEventListener('click', handleRemovePhoto);
+  document.getElementById('photoInput').addEventListener('change', handlePhotoSelected);
 
   // If we already have a saved config + token, auto-attempt connect when a box hash is present
   const hash = parseHash();
@@ -433,7 +465,7 @@ async function handleConnect(evt, autoOpenBoxId){
 async function createNewFile(){
   setSetupStatus('<span class="spinner"></span>Creating inventory.xlsx…', 'info');
   const wb = XLSX.utils.book_new();
-  const boxesWS = XLSX.utils.json_to_sheet([], {header:['ID','Name','Location','Notes','Created']});
+  const boxesWS = XLSX.utils.json_to_sheet([], {header:['ID','Name','Location','Notes','Created','Photo']});
   const itemsWS = XLSX.utils.json_to_sheet([], {header:['BoxID','Item','Quantity','Notes']});
   XLSX.utils.book_append_sheet(wb, boxesWS, 'Boxes');
   XLSX.utils.book_append_sheet(wb, itemsWS, 'Items');
@@ -491,7 +523,7 @@ async function saveInventory(){
   const status = document.getElementById('saveStatus');
   status.innerHTML = '<span class="spinner"></span>Saving…';
   const wb = XLSX.utils.book_new();
-  const boxesWS = XLSX.utils.json_to_sheet(state.boxes, {header:['ID','Name','Location','Notes','Created']});
+  const boxesWS = XLSX.utils.json_to_sheet(state.boxes, {header:['ID','Name','Location','Notes','Created','Photo']});
   const itemsWS = XLSX.utils.json_to_sheet(state.items, {header:['BoxID','Item','Quantity','Notes']});
   XLSX.utils.book_append_sheet(wb, boxesWS, 'Boxes');
   XLSX.utils.book_append_sheet(wb, itemsWS, 'Items');
@@ -585,9 +617,10 @@ function renderDashboard(){
     card.className = 'box-card';
     card.innerHTML = `
       <div class="tape"></div>
+      ${box.Photo ? `<div class="box-thumb"><img src="${box.Photo}" alt=""></div>` : ''}
       <div>
         <div class="box-id label-font">${escapeHtml(box.ID)}</div>
-        <div class="box-name">${escapeHtml(box.Name||'Untitled box')}</div>
+        <div class="box-name" style="${box.Photo?'padding-right:52px;':''}">${escapeHtml(box.Name||'Untitled box')}</div>
         <div class="box-loc">${escapeHtml(box.Location||'No location set')}</div>
         ${matchedItem ? `<div class="box-match">contains "${escapeHtml(matchedItem.Item)}"</div>` : ''}
       </div>
@@ -604,7 +637,7 @@ function nextBoxId(){
     const m = String(b.ID).match(/(\d+)/);
     if(m) max = Math.max(max, parseInt(m[1],10));
   });
-  return 'box' + String(max+1).padStart(2,'0');
+  return 'B' + String(max+1).padStart(3,'0');
 }
 
 function handleAddBox(){
@@ -627,6 +660,103 @@ function openBox(boxId){
   document.getElementById('detailBoxLoc').textContent = box.Location || 'No location set';
   renderItemsTable();
   renderQR(box);
+  renderPhotoPanel(box);
+}
+
+function renderPhotoPanel(box){
+  const frame = document.getElementById('photoFrame');
+  const removeBtn = document.getElementById('btnRemovePhoto');
+  const addBtn = document.getElementById('btnAddPhoto');
+  if(box.Photo){
+    frame.innerHTML = `<img src="${box.Photo}" alt="Photo of ${escapeHtml(box.Name||box.ID)}">`;
+    removeBtn.classList.remove('hidden');
+    addBtn.textContent = 'Change photo';
+  } else {
+    frame.innerHTML = `<span class="photo-placeholder">No photo yet<br>tap to add</span>`;
+    removeBtn.classList.add('hidden');
+    addBtn.textContent = 'Add photo';
+  }
+}
+
+async function handlePhotoSelected(evt){
+  const file = evt.target.files && evt.target.files[0];
+  evt.target.value = ''; // allow re-selecting the same file later
+  if(!file) return;
+  const box = state.boxes.find(b => b.ID === state.currentBoxId);
+  if(!box) return;
+
+  const addBtn = document.getElementById('btnAddPhoto');
+  const oldLabel = addBtn.textContent;
+  addBtn.disabled = true;
+  addBtn.textContent = 'Processing…';
+  try{
+    const dataUrl = await compressImageFile(file);
+    box.Photo = dataUrl;
+    renderPhotoPanel(box);
+  }catch(err){
+    alert(err.message || 'Could not process that image. Try a different photo.');
+  }finally{
+    addBtn.disabled = false;
+    addBtn.textContent = oldLabel;
+  }
+}
+
+function handleRemovePhoto(){
+  const box = state.boxes.find(b => b.ID === state.currentBoxId);
+  if(!box) return;
+  delete box.Photo;
+  renderPhotoPanel(box);
+}
+
+/* Resize + compress an image file into a JPEG data URL small enough to fit
+   in a single Excel cell (32,767 char limit), since photos are stored
+   inline in the xlsx alongside the other box fields. */
+function compressImageFile(file){
+  const MAX_DATAURL_LEN = 32000; // margin below Excel's 32767 cell limit
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not read that file.'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('That file doesn\'t look like a valid image.'));
+      img.onload = () => {
+        try{
+          const sizes = [500, 400, 320, 260, 200, 150, 110];
+          const qualities = [0.7, 0.55, 0.4, 0.3];
+          let best = null;
+          outer:
+          for(const maxDim of sizes){
+            const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+            const w = Math.max(1, Math.round(img.width * scale));
+            const h = Math.max(1, Math.round(img.height * scale));
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0,0,w,h);
+            ctx.drawImage(img, 0, 0, w, h);
+            for(const q of qualities){
+              const dataUrl = canvas.toDataURL('image/jpeg', q);
+              if(!best || dataUrl.length < best.length) best = dataUrl;
+              if(dataUrl.length <= MAX_DATAURL_LEN){
+                best = dataUrl;
+                break outer;
+              }
+            }
+          }
+          if(!best || best.length > MAX_DATAURL_LEN){
+            reject(new Error('This photo is too detailed to compress small enough to store. Try a simpler or lower-resolution photo.'));
+            return;
+          }
+          resolve(best);
+        }catch(e){
+          reject(new Error('Could not process that image.'));
+        }
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 function renderItemsTable(){
