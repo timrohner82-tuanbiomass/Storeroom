@@ -147,11 +147,11 @@ input,select,textarea{font-family:'Inter',sans-serif;}
 .photo-frame:hover{border-color:var(--cardboard-dark);}
 .photo-frame img{width:100%;height:100%;object-fit:cover;display:block;}
 .photo-placeholder{font-size:11px;color:var(--ink-soft);padding:10px;line-height:1.4;}
-.box-thumb{
-  position:absolute;top:10px;right:10px;width:46px;height:46px;border-radius:3px;overflow:hidden;
+.box-thumb-block{
+  width:100%;height:130px;border-radius:3px;overflow:hidden;margin-bottom:10px;
   border:1.5px solid var(--cardboard-dark);background:var(--paper-light);
 }
-.box-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+.box-thumb-block img{width:100%;height:100%;object-fit:cover;display:block;}
 
 table.items{width:100%;border-collapse:collapse;background:var(--white);border:2px solid var(--ink);border-radius:3px;overflow:hidden;}
 table.items th{
@@ -617,10 +617,10 @@ function renderDashboard(){
     card.className = 'box-card';
     card.innerHTML = `
       <div class="tape"></div>
-      ${box.Photo ? `<div class="box-thumb"><img src="${box.Photo}" alt=""></div>` : ''}
       <div>
+        ${box.Photo ? `<div class="box-thumb-block"><img src="${box.Photo}" alt=""></div>` : ''}
         <div class="box-id label-font">${escapeHtml(box.ID)}</div>
-        <div class="box-name" style="${box.Photo?'padding-right:52px;':''}">${escapeHtml(box.Name||'Untitled box')}</div>
+        <div class="box-name">${escapeHtml(box.Name||'Untitled box')}</div>
         <div class="box-loc">${escapeHtml(box.Location||'No location set')}</div>
         ${matchedItem ? `<div class="box-match">contains "${escapeHtml(matchedItem.Item)}"</div>` : ''}
       </div>
